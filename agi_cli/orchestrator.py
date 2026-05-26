@@ -1,9 +1,12 @@
-from typing import List, Iterable, Optional, Tuple
+from typing import List, Iterable, Optional, Tuple, Any, Dict
 from agi_cli.adapters.base import BaseAdapter
 from agi_cli.memory.manager import MemoryManager
 from agi_cli.models import Message, Role, State
 from agi_cli.skills.manager import SkillManager, SkillConfig
+from agi_cli.tools.system import ShellTool, FileTool
 import sys
+import json
+import os
 
 class Orchestrator:
     def __init__(self, memory: MemoryManager, adapters: List[BaseAdapter], summary_threshold: int = 5000):
@@ -13,6 +16,54 @@ class Orchestrator:
         self.summary_threshold = summary_threshold
         self.skill_manager = SkillManager()
         self.active_skill: Optional[SkillConfig] = None
+        
+        # Initialize Core Intelligence Tools
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.tools = {
+            "execute_shell": ShellTool(project_root).execute,
+            "read_file": FileTool(project_root).read_file,
+            "write_file": FileTool(project_root).write_file
+        }
+        
+        # Map tools for Gemini SDK
+        self.gemini_tools = [
+            {"function_declarations": [
+                {
+                    "name": "execute_shell",
+                    "description": "Execute a terminal command in the project environment.",
+                    "parameters": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "command": {"type": "STRING", "description": "The shell command to run."}
+                        },
+                        "required": ["command"]
+                    }
+                },
+                {
+                    "name": "read_file",
+                    "description": "Read the contents of a file from the workspace.",
+                    "parameters": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "path": {"type": "STRING", "description": "The relative path to the file."}
+                        },
+                        "required": ["path"]
+                    }
+                },
+                {
+                    "name": "write_file",
+                    "description": "Write or overwrite a file in the workspace.",
+                    "parameters": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "path": {"type": "STRING", "description": "The relative path to the file."},
+                            "content": {"type": "STRING", "description": "The full content to write."}
+                        },
+                        "required": ["path", "content"]
+                    }
+                }
+            ]}
+        ]
 
     @property
     def active_adapter(self) -> BaseAdapter:
@@ -23,54 +74,66 @@ class Orchestrator:
         detected_skill = self.skill_manager.detect_skill(user_input)
         if detected_skill:
             self.active_skill = detected_skill
-            # We could potentially re-route providers here based on detected_skill.preferredProviders
         
         # 2. Store user message
         user_msg = Message(role=Role.USER, content=user_input)
         self.memory.add_message(user_msg)
 
-        # 3. Check for summarization need
-        history = self.memory.get_messages()
-        tokens = self.active_adapter.get_token_count(history)
-        if tokens > self.summary_threshold:
-            yield (State.COMPRESSING, "\n[Neural Mesh Collapsing - Summarizing...]\n")
-            self._summarize_history()
-            history = self.memory.get_messages() # Refresh history after summary
-
-        # 4. Inject Skill Prompt if active
-        if self.active_skill:
-            # We inject the system prompt temporarily for the current generation
-            # In a more advanced version, we'd manage this in the memory/history
-            skill_prompt = Message(role=Role.SYSTEM, content=self.active_skill.system_prompt)
-            history.insert(0, skill_prompt)
-
-        # 5. Try to get response from current model
-        while self.current_adapter_index < len(self.adapters):
-            adapter = self.active_adapter
+        # ACI Recursive Loop
+        while True:
+            history = self.memory.get_messages()
             
-            # Use the state from the skill config if available
-            thinking_state = State.THINKING
+            # Context Summary Check
+            tokens = self.active_adapter.get_token_count(history)
+            if tokens > self.summary_threshold:
+                yield (State.COMPRESSING, "\n[Neural Mesh Collapsing - Summarizing...]\n")
+                self._summarize_history()
+                history = self.memory.get_messages()
+
             if self.active_skill:
-                # Map mascotState string to State enum if possible, or just use it as a hint
-                pass 
+                skill_prompt = Message(role=Role.SYSTEM, content=self.active_skill.system_prompt)
+                history.insert(0, skill_prompt)
 
-            yield (thinking_state, "")
+            yield (State.THINKING, "")
 
+            full_response = ""
+            tool_call_found = False
+            
             try:
-                full_response = ""
-                for chunk in adapter.generate_response(history, stream=True):
+                # Use Gemini with autonomy tools
+                for chunk in self.active_adapter.generate_response(history, stream=True, tools=self.gemini_tools):
+                    if chunk.startswith("__TOOL_CALL__:"):
+                        tool_call_found = True
+                        _, tool_name, tool_args = chunk.split(":", 2)
+                        args_dict = eval(tool_args) # Safety note: In production use json.loads
+                        
+                        yield (State.ACTING, f"\n[ACI EXECUTION]: Running {tool_name}({args_dict})...\n")
+                        
+                        # Execute Tool
+                        result = self.tools[tool_name](**args_dict)
+                        
+                        # Save Tool Call and Response to Memory
+                        assistant_msg = Message(role=Role.ASSISTANT, content="", tool_calls=[{"name": tool_name, "args": args_dict}])
+                        self.memory.add_message(assistant_msg)
+                        
+                        response_msg = Message(role=Role.USER, content=f"Result of {tool_name}: {result}")
+                        self.memory.add_message(response_msg)
+                        
+                        # Break streaming and loop back for re-prompting with tool result
+                        break
+                    
                     full_response += chunk
                     yield (State.STREAMING, chunk)
 
-                # If successful, save assistant message and break
-                assistant_msg = Message(role=Role.ASSISTANT, content=full_response)
-                self.memory.add_message(assistant_msg)
-                yield (State.SUCCESS, "")
-                return
+                if not tool_call_found:
+                    # Successful completion
+                    assistant_msg = Message(role=Role.ASSISTANT, content=full_response)
+                    self.memory.add_message(assistant_msg)
+                    yield (State.SUCCESS, "")
+                    return
 
             except Exception as e:
-                # Log error and switch to next adapter
-                yield (State.SWITCHING, f"\n[Rerouting Signal: {adapter.model_name} failed ({e}). Trying next node...]\n")
+                yield (State.SWITCHING, f"\n[Rerouting Signal: {self.active_adapter.model_name} failed ({e}). Trying next node...]\n")
                 self.current_adapter_index += 1
                 if self.current_adapter_index >= len(self.adapters):
                     yield (State.ERROR, f"\n[Fatal: All neural pathways exhausted.]")
