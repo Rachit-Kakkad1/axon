@@ -30,6 +30,7 @@ from agi_cli.memory.manager import MemoryManager
 from agi_cli.adapters.gemini import GeminiAdapter
 from agi_cli.adapters.claude import ClaudeAdapter
 from agi_cli.orchestrator import Orchestrator
+from agi_cli.models import State
 from agi_cli.ui import axon_theme, Mascot, get_hud_layout, render_welcome_screen, get_response_header
 
 load_dotenv()
@@ -48,11 +49,11 @@ def main(ctx, db, clear):
 @main.command()
 def login():
     """Authorize AXON with Google via OAuth2."""
-    from agi_cli.auth import run_login_flow
+    from agi_cli.auth import load_creds
     console.print(Panel("[axon.core]AXON AUTHORIZATION[/axon.core]", box=ROUNDED, border_style="axon.core"))
     try:
         with console.status("[axon.core]Waiting for browser authorization...[/axon.core]", spinner="bouncingBar"):
-            run_login_flow()
+            load_creds()
         console.print("[bold green]✔ AXON linked successfully.[/bold green]")
     except Exception as e:
         console.print(f"[axon.error]✘ Sync failed: {e}[/axon.error]")
@@ -99,9 +100,7 @@ def start_chat(db, clear):
             )
             console.print(hud)
             
-            # Show "Listening" mascot before input
-            console.print(f" [axon.core]{Mascot.IDLE[0]}[/axon.core] ", end="")
-            user_input = console.input("[axon.user]YOU[/axon.user] [white]»[/white] ")
+            user_input = console.input(" [axon.user]YOU[/axon.user] [white]»[/white] ")
             
             if user_input.lower() in ["exit", "quit"]:
                 console.print("\n[axon.system]AXON going dormant...[/axon.system]")

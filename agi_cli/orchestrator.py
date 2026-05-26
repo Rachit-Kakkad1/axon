@@ -70,7 +70,7 @@ class Orchestrator:
 
             except Exception as e:
                 # Log error and switch to next adapter
-                yield (State.SWITCHING, f"\n[Rerouting Signal: {adapter.model_name} failed. Trying next node...]\n")
+                yield (State.SWITCHING, f"\n[Rerouting Signal: {adapter.model_name} failed ({e}). Trying next node...]\n")
                 self.current_adapter_index += 1
                 if self.current_adapter_index >= len(self.adapters):
                     yield (State.ERROR, f"\n[Fatal: All neural pathways exhausted.]")

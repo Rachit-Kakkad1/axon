@@ -5,8 +5,11 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 # The scope for the Gemini API
 SCOPES = ['https://www.googleapis.com/auth/generative-language.retriever']
-TOKEN_PATH = 'token.json'
-CLIENT_SECRET_PATH = 'client_secret.json'
+
+# Ensure paths are absolute and relative to the project root
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TOKEN_PATH = os.path.join(PROJECT_ROOT, 'token.json')
+CLIENT_SECRET_PATH = os.path.join(PROJECT_ROOT, 'client_secret.json')
 
 def load_creds():
     creds = None

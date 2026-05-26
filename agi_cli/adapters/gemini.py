@@ -1,4 +1,4 @@
-from typing import List, Iterable
+from typing import List, Iterable, Optional, List, Any
 import os
 from agi_cli.adapters.base import BaseAdapter
 from agi_cli.models import Message, Role
@@ -24,8 +24,34 @@ class GeminiAdapter(BaseAdapter):
                 genai.configure(api_key=api_key)
                 self.model = genai.GenerativeModel(model_id)
 
-    def generate_response(self, messages: List[Message], stream: bool = False) -> Iterable[str]:
-        if not self.model:
+    def _ensure_model(self, tools: Optional[List[Any]] = None):
+        """Lazy initialization of the Gemini model with optional tool support."""
+        if self.model and not tools:
+            return True
+            
+        try:
+            if is_logged_in():
+                import google.generativeai as genai
+                creds = load_creds()
+                genai.configure(credentials=creds)
+                # Pass tools if provided
+                self.model = genai.GenerativeModel(self._model_id, tools=tools)
+                return True
+        except Exception:
+            pass
+            
+        # Fallback to API Key
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(self._model_id, tools=tools)
+            return True
+            
+        return False
+
+    def generate_response(self, messages: List[Message], stream: bool = False, tools: Optional[List[Any]] = None) -> Iterable[str]:
+        if not self._ensure_model(tools=tools):
             yield f"[Gemini {self._model_id} - UNAUTHORIZED] Please run 'python -m agi_cli.main login' or set GEMINI_API_KEY."
             return
 
@@ -33,20 +59,38 @@ class GeminiAdapter(BaseAdapter):
         contents = []
         for msg in messages:
             role = "user" if msg.role == Role.USER else "model"
-            # Gemini system instructions are usually passed separately, 
-            # but for simplicity we'll handle them as model turns or skip
-            if msg.role == Role.SYSTEM:
-                contents.append({"role": "user", "parts": [f"System Instruction: {msg.content}"]})
-                contents.append({"role": "model", "parts": ["Acknowledged."]})
-            else:
-                contents.append({"role": role, "parts": [msg.content]})
+            
+            parts = []
+            if msg.content:
+                parts.append(msg.content)
+            
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    # Map to Gemini tool call format
+                    parts.append(tc) # Simplified for now, assuming adapter receives correct objects
+            
+            if msg.tool_response:
+                # Gemini tool responses use a specific role or part
+                role = "function" # This is a conceptual mapping, Gemini SDK uses specific response objects
+                parts.append(msg.tool_response)
 
+            contents.append({"role": role, "parts": parts})
+
+        # Tool-use often requires non-streaming for the final decision
+        # but the SDK supports streaming text + function calls
         response = self.model.generate_content(contents, stream=stream)
         
         if stream:
             for chunk in response:
-                yield chunk.text
+                if chunk.candidates[0].content.parts:
+                    for part in chunk.candidates[0].content.parts:
+                        if hasattr(part, "text"):
+                            yield part.text
+                        elif hasattr(part, "function_call"):
+                            # Yield function call as a special string or handle in orchestrator
+                            yield f"__TOOL_CALL__:{part.function_call.name}:{part.function_call.args}"
         else:
+            # Handle non-streaming candidate
             yield response.text
 
     def get_token_count(self, messages: List[Message]) -> int:

@@ -1,11 +1,18 @@
 import sqlite3
 import json
+import os
 from typing import List, Optional
 from agi_cli.models import Message, Role
 
 class MemoryManager:
     def __init__(self, db_path: str = "memory.db"):
-        self.db_path = db_path
+        # If path is relative, put it in the project root instead of CWD
+        if not os.path.isabs(db_path):
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            self.db_path = os.path.join(project_root, db_path)
+        else:
+            self.db_path = db_path
+            
         self._init_db()
 
     def _init_db(self):

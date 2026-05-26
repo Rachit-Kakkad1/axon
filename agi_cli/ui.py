@@ -4,7 +4,7 @@ from rich.theme import Theme
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
-from rich.box import ROUNDED, Box
+from rich.box import ROUNDED, Box, SIMPLE
 from rich.align import Align
 from rich.spinner import Spinner
 
@@ -31,32 +31,35 @@ axon_theme = Theme({
 
 # ═══════════════════════════════════════════════════════════════════════════
 # THE SYNAPTIC PRISM — AXON's Living Mascot
-# Braille micro-animations that signal internal neural state
-# ═══════════════════════════════════════════════════════════════════════════
+from rich.spinner import Spinner, SPINNERS
 
+# ═══════════════════════════════════════════════════════════════════════════
+# CUSTOM SPINNER REGISTRATION
+# ═══════════════════════════════════════════════════════════════════════════
+SPINNERS["axon_idle"] = {"frames": ["⎔", "✦", "⎔", "✧"], "interval": 200}
+SPINNERS["axon_thinking"] = {"frames": ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], "interval": 80}
+SPINNERS["axon_coding"] = {"frames": ["⎔", "⎶", "⎔", "⎶"], "interval": 150}
+SPINNERS["axon_research"] = {"frames": ["✦", "✧", "❃", "✧"], "interval": 150}
+SPINNERS["axon_architecture"] = {"frames": ["⎔", "⎚", "⎔", "⎚"], "interval": 300}
+SPINNERS["axon_debug"] = {"frames": ["⎔", "✘", "⎔", "✘"], "interval": 150}
+SPINNERS["axon_memory"] = {"frames": ["○", "◎", "●", "◎"], "interval": 200}
+SPINNERS["axon_streaming"] = {"frames": ["•", "◦", "∙", "◦"], "interval": 100}
+SPINNERS["axon_switching"] = {"frames": ["×", "÷"], "interval": 150}
+SPINNERS["axon_compressing"] = {"frames": ["◰", "◱", "◲", "◳"], "interval": 150}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# THE OBSIDIAN NEURAL THEME
+...
 class Mascot:
     """The Synaptic Prism — compact, state-driven neural core."""
 
-    IDLE        = ["⎔", "✦", "⎔", "✧"]
-    THINKING    = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    
-    # Skill-specific states
-    CODING      = ["⎔", "⎶", "⎔", "⎶"] # Sharp neural pulses
-    RESEARCH    = ["✦", "✧", "❃", "✧"] # Branching/expanding retrieval
-    ARCHITECTURE = ["⎔", "⎚", "⎔", "⎚"] # Slow deep cognition waves
-    DEBUG       = ["⎔", "✘", "⎔", "✘"] # Flickering signal traces
-    MEMORY      = ["○", "◎", "●", "◎"] # Collapsing neural folds
-
-    STREAMING   = ["•", "◦", "∙", "◦"]
-    SWITCHING   = ["×", "÷"]
-    COMPRESSING = ["◰", "◱", "◲", "◳"]
-    ERROR       = ["⚠"]
-
     @staticmethod
     def get_spinner(state="idle", color="axon.core"):
-        frames = getattr(Mascot, state.upper(), Mascot.IDLE)
-        return Spinner(frames, style=color)
-
+        # Map state to the registered spinner keys
+        spinner_key = f"axon_{state.lower()}"
+        if spinner_key not in SPINNERS:
+            spinner_key = "axon_idle"
+        return Spinner(spinner_key, style=color)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # WELCOME SCREEN — Premium Claude-Code-Inspired Panel
@@ -226,49 +229,28 @@ def render_welcome_screen(console, memory, model_name, ctx_limit, cwd):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_hud_layout(active_model, memory_usage, context_tokens, max_tokens, active_skill="None"):
-    """Creates the premium Skill-aware HUD panel."""
+    """Creates a sleek, minimalist HUD."""
     
-    # Mascot ASCII - Central visualization (as requested in Skill System design)
-    # Using a slightly simplified version of the user's requested circular art
-    mascot_lines = [
-        "                 ◉                                    ",
-        "            ╱────────╲                                ",
-        "          ╱─╱  ◎◎  ╲─╲                               ",
-        "          ╲─╲──────╱─╱                               ",
-        "            ╲──────╱                                 "
-    ]
+    # Memory bar (small)
+    memory_bar = "■" * (memory_usage // 20) + "□" * (5 - memory_usage // 20)
     
-    panel_content = Text()
-    panel_content.append("\n")
-    for line in mascot_lines:
-        panel_content.append(line + "\n", style="axon.core")
-    
-    panel_content.append("\n")
-    panel_content.append(f"  Active Skill: ", style="axon.system")
-    panel_content.append(f"{active_skill.upper()}\n", style="axon.core")
-    
-    panel_content.append(f"  Provider:     ", style="axon.system")
-    panel_content.append(f"{active_model}\n", style="axon.amber")
-    
-    panel_content.append(f"  Context:      ", style="axon.system")
-    panel_content.append(f"Stable\n", style="axon.green")
-    
-    panel_content.append(f"  Routing:      ", style="axon.system")
-    panel_content.append(f"Adaptive\n", style="axon.core")
-
-    header_text = Text.assemble(
-        ("AXON Runtime", "axon.core"),
-        (" " * 18),
-        (f"Memory {memory_usage}%", "axon.violet")
+    hud_content = Text.assemble(
+        (" ⎔ ", "axon.core"),
+        (f"{active_skill.upper()} ", "axon.core"),
+        ("│ ", "axon.graphite"),
+        (f"{active_model.upper()} ", "axon.amber"),
+        ("│ ", "axon.graphite"),
+        (f"MEM {memory_bar} ", "axon.violet"),
+        ("│ ", "axon.graphite"),
+        (f"{context_tokens:,} tkn", "axon.system")
     )
-
+    
     return Panel(
-        panel_content,
-        title=header_text,
+        Align.center(hud_content),
         border_style="axon.graphite",
-        box=ROUNDED,
-        width=56,
-        padding=(0, 1)
+        box=SIMPLE,
+        padding=(0, 1),
+        expand=False
     )
 
 
@@ -279,9 +261,8 @@ def get_hud_layout(active_model, memory_usage, context_tokens, max_tokens, activ
 def get_response_header(model_name):
     """Returns a minimalist response indicator."""
     return Text.assemble(
-        (f"\n {Mascot.IDLE[0]} ", "axon.core"),
-        (f"{model_name.upper()} ", "axon.graphite"),
-        ("— ", "axon.graphite"),
+        (f"\n {model_name.upper()} ", "black on #00F0FF"),
+        (" ", "axon.bg")
     )
 
 
