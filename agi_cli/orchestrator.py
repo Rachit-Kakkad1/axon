@@ -2,6 +2,7 @@ from typing import List, Iterable, Optional, Tuple
 from agi_cli.adapters.base import BaseAdapter
 from agi_cli.memory.manager import MemoryManager
 from agi_cli.models import Message, Role, State
+from agi_cli.skills.manager import SkillManager, SkillConfig
 import sys
 
 class Orchestrator:
@@ -10,17 +11,25 @@ class Orchestrator:
         self.adapters = adapters
         self.current_adapter_index = 0
         self.summary_threshold = summary_threshold
+        self.skill_manager = SkillManager()
+        self.active_skill: Optional[SkillConfig] = None
 
     @property
     def active_adapter(self) -> BaseAdapter:
         return self.adapters[self.current_adapter_index]
 
     def chat(self, user_input: str) -> Iterable[Tuple[State, str]]:
-        # 1. Store user message
+        # 1. Skill Detection
+        detected_skill = self.skill_manager.detect_skill(user_input)
+        if detected_skill:
+            self.active_skill = detected_skill
+            # We could potentially re-route providers here based on detected_skill.preferredProviders
+        
+        # 2. Store user message
         user_msg = Message(role=Role.USER, content=user_input)
         self.memory.add_message(user_msg)
 
-        # 2. Check for summarization need
+        # 3. Check for summarization need
         history = self.memory.get_messages()
         tokens = self.active_adapter.get_token_count(history)
         if tokens > self.summary_threshold:
@@ -28,12 +37,24 @@ class Orchestrator:
             self._summarize_history()
             history = self.memory.get_messages() # Refresh history after summary
 
-        # 3. Try to get response from current model
+        # 4. Inject Skill Prompt if active
+        if self.active_skill:
+            # We inject the system prompt temporarily for the current generation
+            # In a more advanced version, we'd manage this in the memory/history
+            skill_prompt = Message(role=Role.SYSTEM, content=self.active_skill.system_prompt)
+            history.insert(0, skill_prompt)
+
+        # 5. Try to get response from current model
         while self.current_adapter_index < len(self.adapters):
             adapter = self.active_adapter
-            history = self.memory.get_messages()
+            
+            # Use the state from the skill config if available
+            thinking_state = State.THINKING
+            if self.active_skill:
+                # Map mascotState string to State enum if possible, or just use it as a hint
+                pass 
 
-            yield (State.THINKING, "")
+            yield (thinking_state, "")
 
             try:
                 full_response = ""

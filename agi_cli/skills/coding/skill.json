@@ -1,0 +1,9 @@
+{
+  "name": "Coding",
+  "description": "Optimized for implementation, refactoring, debugging, and repository reasoning.",
+  "preferredProviders": ["gemini-1.5-flash", "claude-3-5-sonnet"],
+  "memoryPriority": ["recent_files", "repo_context", "recent_edits"],
+  "tools": ["filesystem", "terminal", "git"],
+  "mascotState": "coding",
+  "hudTheme": "axon.core"
+}

@@ -5,6 +5,15 @@ import time
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Force UTF-8 on Windows for Unicode mascot/glyphs
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -21,7 +30,7 @@ from agi_cli.memory.manager import MemoryManager
 from agi_cli.adapters.gemini import GeminiAdapter
 from agi_cli.adapters.claude import ClaudeAdapter
 from agi_cli.orchestrator import Orchestrator
-from agi_cli.ui import axon_theme, Mascot, get_hud_layout, print_axon_brand, get_response_header
+from agi_cli.ui import axon_theme, Mascot, get_hud_layout, render_welcome_screen, get_response_header
 
 load_dotenv()
 
@@ -54,13 +63,20 @@ def start_chat(db, clear):
         memory.clear_memory()
         console.print("[axon.error]Memory synapses reset.[/axon.error]")
 
-    print_axon_brand(console)
-
     adapters = [
         GeminiAdapter("gemini-1.5-flash"),
         ClaudeAdapter("claude-3-5-sonnet")
     ]
     orchestrator = Orchestrator(memory, adapters)
+
+    # Premium welcome screen
+    render_welcome_screen(
+        console,
+        memory,
+        orchestrator.active_adapter.model_name,
+        orchestrator.active_adapter.context_limit,
+        os.getcwd()
+    )
     
     while True:
         try:
@@ -72,11 +88,14 @@ def start_chat(db, clear):
             # Simulated memory usage for UI
             memory_usage = min(100, (context_tokens / 5000) * 100) if context_tokens < 5000 else 99
             
+            skill_name = orchestrator.active_skill.name if orchestrator.active_skill else "None"
+            
             hud = get_hud_layout(
                 orchestrator.active_adapter.model_name,
                 int(memory_usage),
                 context_tokens,
-                max_tokens
+                max_tokens,
+                active_skill=skill_name
             )
             console.print(hud)
             
@@ -94,8 +113,13 @@ def start_chat(db, clear):
             if not user_input.strip():
                 continue
 
+            # Detect initial state for the spinner
+            initial_state = "thinking"
+            if orchestrator.active_skill:
+                initial_state = orchestrator.active_skill.mascotState
+
             # PRE-RESPONSE STATUS (Thinking/Streaming)
-            with Live(Mascot.get_spinner("thinking"), transient=True, console=console) as live:
+            with Live(Mascot.get_spinner(initial_state), transient=True, console=console) as live:
                 full_streamed_text = ""
                 
                 # Header for the response
@@ -104,7 +128,12 @@ def start_chat(db, clear):
                 # Start chat stream
                 for state, chunk in orchestrator.chat(user_input):
                     # Update mascot based on state
-                    live.update(Mascot.get_spinner(state.value))
+                    # If the orchestrator says THINKING, we might want to use the skill's specific thinking state
+                    current_state = state.value
+                    if state == State.THINKING and orchestrator.active_skill:
+                        current_state = orchestrator.active_skill.mascotState
+                        
+                    live.update(Mascot.get_spinner(current_state))
                     
                     if "[Gemini" in chunk and "UNAUTHORIZED" in chunk:
                         console.print(Panel(chunk, border_style="axon.error", title="[bold red]AUTH ERROR[/bold red]"))

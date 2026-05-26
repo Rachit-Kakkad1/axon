@@ -1,0 +1,9 @@
+{
+  "name": "Research",
+  "description": "Optimized for information retrieval, synthesis, and deep topic exploration.",
+  "preferredProviders": ["gemini-1.5-flash"],
+  "memoryPriority": ["external_sources", "citations", "summaries"],
+  "tools": ["web_search", "document_reader"],
+  "mascotState": "research",
+  "hudTheme": "axon.core"
+}

@@ -1,0 +1,2 @@
+[console_scripts]
+axon = agi_cli.main:main

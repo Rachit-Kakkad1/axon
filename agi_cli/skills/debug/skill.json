@@ -1,0 +1,9 @@
+{
+  "name": "Debug",
+  "description": "Optimized for stack trace analysis, runtime diagnosis, and failure reasoning.",
+  "preferredProviders": ["gemini-1.5-flash"],
+  "memoryPriority": ["error_logs", "recent_execution", "stack_traces"],
+  "tools": ["log_analyzer", "debugger", "terminal"],
+  "mascotState": "debug",
+  "hudTheme": "axon.error"
+}

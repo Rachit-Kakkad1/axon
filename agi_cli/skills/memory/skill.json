@@ -1,0 +1,9 @@
+{
+  "name": "Memory",
+  "description": "Optimized for context refinement, semantic compression, and long-term synchronization.",
+  "preferredProviders": ["gemini-1.5-flash"],
+  "memoryPriority": ["stale_conversations", "transient_context", "key_decisions"],
+  "tools": ["context_compressor", "memory_syncer"],
+  "mascotState": "memory",
+  "hudTheme": "axon.violet"
+}

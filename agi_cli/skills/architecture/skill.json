@@ -1,0 +1,9 @@
+{
+  "name": "Architecture",
+  "description": "Optimized for high-level systems design, scaling, and distributed reasoning.",
+  "preferredProviders": ["gemini-1.5-flash", "claude-3-5-sonnet"],
+  "memoryPriority": ["design_docs", "scaling_history", "abstractions"],
+  "tools": ["diagram_generator", "spec_analyzer"],
+  "mascotState": "architecture",
+  "hudTheme": "axon.amber"
+}

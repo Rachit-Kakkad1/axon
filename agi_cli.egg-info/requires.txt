@@ -1,0 +1,6 @@
+click
+rich
+google-generativeai
+google-auth-oauthlib
+google-auth-httplib2
+python-dotenv

@@ -22,6 +22,7 @@ class MemoryManager:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS session_info (
                     key TEXT PRIMARY KEY,
+                    
                     value TEXT
                 )
             """)
@@ -52,3 +53,19 @@ class MemoryManager:
     def clear_memory(self):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM messages")
+
+    def get_message_count(self) -> int:
+        """Total number of stored synapses."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM messages")
+            return cursor.fetchone()[0]
+
+    def get_recent_activity(self, limit: int = 4):
+        """Recent messages with timestamps for the welcome screen."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT role, substr(content, 1, 60), timestamp "
+                "FROM messages ORDER BY id DESC LIMIT ?",
+                (limit,)
+            )
+            return cursor.fetchall()
