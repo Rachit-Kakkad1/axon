@@ -1,4 +1,4 @@
-from typing import List, Iterable
+from typing import List, Iterable, Optional, Any
 from agi_cli.adapters.base import BaseAdapter
 from agi_cli.models import Message
 
@@ -6,7 +6,7 @@ class ClaudeAdapter(BaseAdapter):
     def __init__(self, model_id: str = "claude-3-5-sonnet"):
         self._model_id = model_id
 
-    def generate_response(self, messages: List[Message], stream: bool = False) -> Iterable[str]:
+    def generate_response(self, messages: List[Message], stream: bool = False, tools: Optional[List[Any]] = None) -> Iterable[str]:
         # Mock implementation
         last_msg = messages[-1].content if messages else "nothing"
         yield f"[Claude {self._model_id}] (Fallback) Hello! I've taken over with the same context. You just said: {last_msg}"
